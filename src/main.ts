@@ -34,8 +34,22 @@ const CLASSROOM_LATLNG = leaflet.latLng(
 // Tunable gameplay parameters
 const GAMEPLAY_ZOOM_LEVEL = 19;
 const TILE_DEGREES = 1e-4;
-const NEIGHBORHOOD_SIZE = 8;
+const NEIGHBORHOOD_SIZE = 24;
 const CACHE_SPAWN_PROBABILITY = 0.1;
+
+const INTERACTION_RADIUS = 5;
+
+let heldTokenValue: number | null = null;
+
+function updateStatusPanel() {
+  if (heldTokenValue === null) {
+    statusPanelDiv.textContent = "...";
+  } else {
+    statusPanelDiv.textContent =
+      `You are holding a token of value ${heldTokenValue}.`;
+  }
+}
+updateStatusPanel();
 
 // Create the map (element with id "map" is defined in index.html)
 const map = leaflet.map(mapDiv, {
@@ -61,47 +75,126 @@ const playerMarker = leaflet.marker(CLASSROOM_LATLNG);
 playerMarker.bindTooltip("That's you!");
 playerMarker.addTo(map);
 
-// Display the player's points
-let playerPoints = 0;
-statusPanelDiv.innerHTML = "No points yet...";
-
 // Add caches to the map by cell numbers
-function spawnCache(i: number, j: number) {
+function spawnCache(x: number, y: number) {
   // Convert cell numbers into lat/lng bounds
   const origin = CLASSROOM_LATLNG;
   const bounds = leaflet.latLngBounds([
-    [origin.lat + i * TILE_DEGREES, origin.lng + j * TILE_DEGREES],
-    [origin.lat + (i + 1) * TILE_DEGREES, origin.lng + (j + 1) * TILE_DEGREES],
+    [origin.lat + x * TILE_DEGREES, origin.lng + y * TILE_DEGREES],
+    [origin.lat + (x + 1) * TILE_DEGREES, origin.lng + (y + 1) * TILE_DEGREES],
   ]);
 
   // Add a rectangle to the map to represent the cache
-  const rect = leaflet.rectangle(bounds);
+  let rect;
+  if (Math.abs(x) <= INTERACTION_RADIUS && Math.abs(y) <= INTERACTION_RADIUS) {
+    rect = leaflet.rectangle(bounds);
+  } else {
+    rect = leaflet.rectangle(bounds, { color: "red" });
+  }
   rect.addTo(map);
 
+  let pointValue = 2 +
+    2 * Math.floor(luck([x, y, "initialValue"].toString()) * 2);
+
+  // The popup offers a description and button
+  const popupDiv = document.createElement("div");
+  popupDiv.innerHTML =
+    popupDiv.innerHTML =
+      `<div>(${x},${y})<br>Value: <span id="value">${pointValue}</span></div>`;
+
+  function makePopup() {
+    const buttons = document.createElement("div");
+    buttons.id = "popupButtons";
+
+    const poke = document.createElement("button");
+    poke.id = "poke";
+    poke.textContent = "poke";
+
+    poke.onclick = () => {
+      if (heldTokenValue !== null) {
+        poke.disabled = true;
+        return;
+      }
+      if (pointValue === 0) {
+        poke.disabled = true;
+        return;
+      }
+
+      heldTokenValue = pointValue;
+      pointValue = 0;
+
+      const v = popupDiv.querySelector("#value");
+      if (v) v.textContent = "0";
+
+      updateStatusPanel();
+    };
+
+    const craft = document.createElement("button");
+    craft.id = "craft";
+    craft.textContent = "craft";
+    craft.onclick = () => {
+      if (heldTokenValue !== null && pointValue === heldTokenValue) {
+        pointValue = pointValue + heldTokenValue;
+        heldTokenValue = null;
+        const v = popupDiv.querySelector("#value");
+        if (v) v.textContent = String(pointValue);
+        updateStatusPanel();
+      }
+      if (heldTokenValue === null || pointValue !== heldTokenValue) {
+        craft.disabled = true;
+      }
+    };
+
+    const place = document.createElement("button");
+    place.id = "place";
+    place.textContent = "place";
+    place.onclick = () => {
+      if (heldTokenValue !== null && pointValue === 0) {
+        pointValue = heldTokenValue;
+        heldTokenValue = null;
+        const v = popupDiv.querySelector("#value");
+        if (v) v.textContent = String(pointValue);
+        updateStatusPanel();
+      }
+    };
+    if (pointValue !== 0 || heldTokenValue === null) {
+      place.disabled = true;
+    }
+    buttons.appendChild(place);
+
+    buttons.appendChild(poke);
+    buttons.appendChild(craft);
+    buttons.appendChild(place);
+
+    if (heldTokenValue !== null || pointValue === 0) {
+      poke.disabled = true;
+    }
+
+    if (heldTokenValue !== pointValue) {
+      craft.disabled = true;
+    }
+
+    if (heldTokenValue === null || pointValue !== 0) {
+      place.disabled = true;
+    }
+
+    return buttons;
+  }
+
   // Handle interactions with the cache
-  rect.bindPopup(() => {
-    // Each cache has a random point value, mutable by the player
-    let pointValue = Math.floor(luck([i, j, "initialValue"].toString()) * 100);
+  if (Math.abs(x) <= INTERACTION_RADIUS && Math.abs(y) <= INTERACTION_RADIUS) {
+    rect.bindPopup(() => {
+      const oldButtons = popupDiv.querySelector("#popupButtons");
+      if (oldButtons) {
+        oldButtons.remove();
+      }
 
-    // The popup offers a description and button
-    const popupDiv = document.createElement("div");
-    popupDiv.innerHTML = `
-                <div>There is a cache here at "${i},${j}". It has value <span id="value">${pointValue}</span>.</div>
-                <button id="poke">poke</button>`;
-
-    // Clicking the button decrements the cache's value and increments the player's points
-    popupDiv
-      .querySelector<HTMLButtonElement>("#poke")!
-      .addEventListener("click", () => {
-        pointValue--;
-        popupDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML =
-          pointValue.toString();
-        playerPoints++;
-        statusPanelDiv.innerHTML = `${playerPoints} points accumulated`;
-      });
-
-    return popupDiv;
-  });
+      popupDiv.appendChild(makePopup());
+      return popupDiv;
+    });
+  } else {
+    rect.bindTooltip("Too far!");
+  }
 }
 
 // Look around the player's neighborhood for caches to spawn
