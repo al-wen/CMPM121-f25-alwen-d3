@@ -17,7 +17,7 @@
 Key technical challenge: Can you assemble a map-based user interface using the Leaflet mapping framework?
 Key gameplay challenge: Can players collect and craft tokens from nearby locations to finally make one of sufficiently high value?
 
-### Steps
+### Steps for D3.a
 
 - [x] copy main.ts to reference.ts for future reference
 - [x] delete everything in main.ts
@@ -32,4 +32,14 @@ Key gameplay challenge: Can players collect and craft tokens from nearby locatio
 - [x] allow player to craft (combine) tolen
 - [ ] ...
 
-## D3.b: the
+## D3.b: Globe-spanning Gameplay
+
+### Steps for D3.b
+
+- [ ] simulate local player movement
+- [ ] anchor grid at null island (0,0)
+- [ ] cells continue to be visible all the way out to the edge of the map as player moves
+- [ ] cells forget their state when they are no longer visible on the screen
+- [ ] only the cells near to their current location are available for interaction as player moves
+- [ ] label cells to show value
+- [ ] game now requires that threshold to be reached for victory to be declared
