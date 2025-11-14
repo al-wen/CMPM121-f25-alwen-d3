@@ -34,9 +34,7 @@ const CLASSROOM_LATLNG = leaflet.latLng(
 // Tunable gameplay parameters
 const GAMEPLAY_ZOOM_LEVEL = 19;
 const TILE_DEGREES = 1e-4;
-const NEIGHBORHOOD_SIZE = 24;
 const CACHE_SPAWN_PROBABILITY = 0.1;
-
 const INTERACTION_RADIUS = 5;
 
 let heldTokenValue: number | null = null;
@@ -48,7 +46,11 @@ function updateStatusPanel() {
     statusPanelDiv.textContent =
       `You are holding a token of value ${heldTokenValue}.`;
   }
+  if (checkWin()) {
+    statusPanelDiv.innerHTML += "<div>You win!</div>";
+  }
 }
+
 updateStatusPanel();
 
 // Create the map (element with id "map" is defined in index.html)
@@ -75,32 +77,67 @@ const playerMarker = leaflet.marker(CLASSROOM_LATLNG);
 playerMarker.bindTooltip("That's you!");
 playerMarker.addTo(map);
 
+type CustomRect = leaflet.Rectangle & {
+  _popupDiv?: HTMLElement;
+  _makePopup?: () => HTMLElement;
+};
+
+const cellLayers = new Map<string, CustomRect>();
+
+function cellKey(x: number, y: number) {
+  return `${x},${y}`;
+}
+
+function latToCellX(lat: number) {
+  return Math.floor(lat / TILE_DEGREES);
+}
+
+function lngToCellY(lng: number) {
+  return Math.floor(lng / TILE_DEGREES);
+}
+
 // Add caches to the map by cell numbers
 function spawnCache(x: number, y: number) {
+  const key = cellKey(x, y);
+  if (cellLayers.has(key)) {
+    return;
+  }
+
   // Convert cell numbers into lat/lng bounds
-  const origin = CLASSROOM_LATLNG;
   const bounds = leaflet.latLngBounds([
-    [origin.lat + x * TILE_DEGREES, origin.lng + y * TILE_DEGREES],
-    [origin.lat + (x + 1) * TILE_DEGREES, origin.lng + (y + 1) * TILE_DEGREES],
+    [x * TILE_DEGREES, y * TILE_DEGREES],
+    [(x + 1) * TILE_DEGREES, (y + 1) * TILE_DEGREES],
   ]);
 
+  const dx = Math.round(playerLatLng.lat / TILE_DEGREES);
+  const dy = Math.round(playerLatLng.lng / TILE_DEGREES);
+
+  const distX = x - dx;
+  const distY = y - dy;
+
   // Add a rectangle to the map to represent the cache
-  let rect;
-  if (Math.abs(x) <= INTERACTION_RADIUS && Math.abs(y) <= INTERACTION_RADIUS) {
-    rect = leaflet.rectangle(bounds);
+  let rect: CustomRect;
+  if (
+    Math.abs(distX) <= INTERACTION_RADIUS &&
+    Math.abs(distY) <= INTERACTION_RADIUS
+  ) {
+    rect = leaflet.rectangle(bounds, { color: "blue" }) as CustomRect;
   } else {
-    rect = leaflet.rectangle(bounds, { color: "red" });
+    rect = leaflet.rectangle(bounds, { color: "red" }) as CustomRect;
   }
   rect.addTo(map);
 
-  let pointValue = 2 +
-    2 * Math.floor(luck([x, y, "initialValue"].toString()) * 2);
+  cellLayers.set(key, rect);
+
+  // token value
+  const values = [0, 2, 4, 8];
+  let pointValue =
+    values[Math.floor(luck([x, y, "initialValue"].toString()) * values.length)];
 
   // The popup offers a description and button
   const popupDiv = document.createElement("div");
   popupDiv.innerHTML =
-    popupDiv.innerHTML =
-      `<div>(${x},${y})<br>Value: <span id="value">${pointValue}</span></div>`;
+    `<div>(${x},${y})<br>Value: <span id="value">${pointValue}</span></div>`;
 
   function makePopup() {
     const buttons = document.createElement("div");
@@ -181,8 +218,15 @@ function spawnCache(x: number, y: number) {
     return buttons;
   }
 
+  // Store popup maker and popupDiv on the rectangle so refreshCache can re-bind later
+  rect._popupDiv = popupDiv;
+  rect._makePopup = makePopup;
+
   // Handle interactions with the cache
-  if (Math.abs(x) <= INTERACTION_RADIUS && Math.abs(y) <= INTERACTION_RADIUS) {
+  if (
+    Math.abs(distX) <= INTERACTION_RADIUS &&
+    Math.abs(distY) <= INTERACTION_RADIUS
+  ) {
     rect.bindPopup(() => {
       const oldButtons = popupDiv.querySelector("#popupButtons");
       if (oldButtons) {
@@ -197,12 +241,111 @@ function spawnCache(x: number, y: number) {
   }
 }
 
-// Look around the player's neighborhood for caches to spawn
-for (let i = -NEIGHBORHOOD_SIZE; i < NEIGHBORHOOD_SIZE; i++) {
-  for (let j = -NEIGHBORHOOD_SIZE; j < NEIGHBORHOOD_SIZE; j++) {
-    // If location i,j is lucky enough, spawn a cache!
-    if (luck([i, j].toString()) < CACHE_SPAWN_PROBABILITY) {
-      spawnCache(i, j);
+// Player Movement
+
+let playerLatLng = CLASSROOM_LATLNG;
+
+function movePlayer(dx: number, dy: number) {
+  playerLatLng = leaflet.latLng(
+    playerLatLng.lat + dx * TILE_DEGREES,
+    playerLatLng.lng + dy * TILE_DEGREES,
+  );
+
+  playerMarker.setLatLng(playerLatLng);
+  map.panTo(playerLatLng);
+
+  refreshCache();
+}
+
+function moveButtons() {
+  const directions: { label: string; dx: number; dy: number }[] = [
+    { label: "Up", dx: 1, dy: 0 },
+    { label: "Down", dx: -1, dy: 0 },
+    { label: "Left", dx: 0, dy: -1 },
+    { label: "Right", dx: 0, dy: 1 },
+  ];
+
+  directions.forEach((dir) => {
+    const btn = document.createElement("button");
+    btn.textContent = dir.label;
+    btn.onclick = () => movePlayer(dir.dx, dir.dy);
+    controlPanelDiv.appendChild(btn);
+  });
+}
+
+moveButtons();
+
+function refreshCache() {
+  const bounds = map.getBounds();
+  const minX = latToCellX(bounds.getSouth());
+  const maxX = latToCellX(bounds.getNorth());
+  const minY = lngToCellY(bounds.getWest());
+  const maxY = lngToCellY(bounds.getEast());
+
+  const keep = new Set<string>();
+
+  const dx = Math.round(playerLatLng.lat / TILE_DEGREES);
+  const dy = Math.round(playerLatLng.lng / TILE_DEGREES);
+
+  for (let x = minX; x <= maxX; x++) {
+    for (let y = minY; y <= maxY; y++) {
+      const key = cellKey(x, y);
+      keep.add(key);
+
+      if (!cellLayers.has(key)) {
+        if (luck([x, y].toString()) < CACHE_SPAWN_PROBABILITY) {
+          spawnCache(x, y);
+        }
+      } else {
+        const distX = x - dx;
+        const distY = y - dy;
+        const rect = cellLayers.get(key)!;
+
+        if (
+          Math.abs(distX) <= INTERACTION_RADIUS &&
+          Math.abs(distY) <= INTERACTION_RADIUS
+        ) {
+          rect.setStyle({ color: "blue" });
+
+          if (!rect.getPopup()) {
+            if (rect.getTooltip()) rect.unbindTooltip();
+            const popupDiv = rect._popupDiv;
+            const makePopup = rect._makePopup;
+            if (popupDiv && makePopup) {
+              rect.bindPopup(() => {
+                const oldButtons = popupDiv.querySelector("#popupButtons");
+                if (oldButtons) oldButtons.remove();
+                popupDiv.appendChild(makePopup());
+                return popupDiv;
+              });
+            }
+          }
+        } else {
+          rect.setStyle({ color: "red" });
+          if (rect.getPopup()) {
+            map.closePopup(rect.getPopup()!);
+            rect.unbindPopup();
+          }
+          rect.bindTooltip("Too far!");
+        }
+      }
     }
   }
+
+  for (const [key, layer] of cellLayers.entries()) {
+    if (!keep.has(key)) {
+      map.removeLayer(layer);
+      cellLayers.delete(key);
+    }
+  }
+}
+
+refreshCache();
+
+function checkWin() {
+  if (heldTokenValue !== null && heldTokenValue >= 16) {
+    console.log("win");
+    return true;
+  }
+  return false;
 }
