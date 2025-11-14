@@ -30,7 +30,6 @@ Key gameplay challenge: Can players collect and craft tokens from nearby locatio
 - [x] allow player to collect token
 - [x] allow player to place token
 - [x] allow player to craft (combine) tolen
-- [ ] ...
 
 ## D3.b: Globe-spanning Gameplay
 
@@ -42,3 +41,9 @@ Key gameplay challenge: Can players collect and craft tokens from nearby locatio
 - [x] cells forget their state when they are no longer visible on the screen
 - [x] only the cells near to their current location are available for interaction as player moves
 - [x] game now requires that threshold to be reached for victory to be declared
+
+## D3.b: [insert header]
+
+### Steps for D3.c
+
+- [ ] ...

@@ -96,7 +96,50 @@ function lngToCellY(lng: number) {
   return Math.floor(lng / TILE_DEGREES);
 }
 
-// Add caches to the map by cell numbers
+// HELPERS
+
+function isInRange(distX: number, distY: number) {
+  return Math.abs(distX) <= INTERACTION_RADIUS &&
+    Math.abs(distY) <= INTERACTION_RADIUS;
+}
+
+function bindInteractivePopup(rect: CustomRect, _map: leaflet.Map) {
+  const popupDiv = rect._popupDiv;
+  const makePopup = rect._makePopup;
+  if (!popupDiv || !makePopup) return;
+
+  rect.bindPopup(() => {
+    const oldButtons = popupDiv.querySelector("#popupButtons");
+    if (oldButtons) oldButtons.remove();
+    popupDiv.appendChild(makePopup());
+    return popupDiv;
+  });
+}
+
+function applyProximityStyle(
+  rect: CustomRect,
+  inRange: boolean,
+  map: leaflet.Map,
+) {
+  if (inRange) {
+    rect.setStyle({ color: "blue" });
+
+    if (!rect.getPopup()) {
+      if (rect.getTooltip()) rect.unbindTooltip();
+      bindInteractivePopup(rect, map);
+    }
+  } else {
+    rect.setStyle({ color: "red" });
+    if (rect.getPopup()) {
+      map.closePopup(rect.getPopup()!);
+      rect.unbindPopup();
+    }
+    rect.bindTooltip("Too far!");
+  }
+}
+
+// Cache
+
 function spawnCache(x: number, y: number) {
   const key = cellKey(x, y);
   if (cellLayers.has(key)) {
@@ -115,26 +158,20 @@ function spawnCache(x: number, y: number) {
   const distX = x - dx;
   const distY = y - dy;
 
-  // Add a rectangle to the map to represent the cache
   let rect: CustomRect;
-  if (
-    Math.abs(distX) <= INTERACTION_RADIUS &&
-    Math.abs(distY) <= INTERACTION_RADIUS
-  ) {
+  if (isInRange(distX, distY)) {
     rect = leaflet.rectangle(bounds, { color: "blue" }) as CustomRect;
   } else {
     rect = leaflet.rectangle(bounds, { color: "red" }) as CustomRect;
   }
-  rect.addTo(map);
 
+  rect.addTo(map);
   cellLayers.set(key, rect);
 
-  // token value
   const values = [0, 2, 4, 8];
   let pointValue =
     values[Math.floor(luck([x, y, "initialValue"].toString()) * values.length)];
 
-  // The popup offers a description and button
   const popupDiv = document.createElement("div");
   popupDiv.innerHTML =
     `<div>(${x},${y})<br>Value: <span id="value">${pointValue}</span></div>`;
@@ -197,8 +234,8 @@ function spawnCache(x: number, y: number) {
     if (pointValue !== 0 || heldTokenValue === null) {
       place.disabled = true;
     }
-    buttons.appendChild(place);
 
+    buttons.appendChild(place);
     buttons.appendChild(poke);
     buttons.appendChild(craft);
     buttons.appendChild(place);
@@ -218,27 +255,10 @@ function spawnCache(x: number, y: number) {
     return buttons;
   }
 
-  // Store popup maker and popupDiv on the rectangle so refreshCache can re-bind later
   rect._popupDiv = popupDiv;
   rect._makePopup = makePopup;
 
-  // Handle interactions with the cache
-  if (
-    Math.abs(distX) <= INTERACTION_RADIUS &&
-    Math.abs(distY) <= INTERACTION_RADIUS
-  ) {
-    rect.bindPopup(() => {
-      const oldButtons = popupDiv.querySelector("#popupButtons");
-      if (oldButtons) {
-        oldButtons.remove();
-      }
-
-      popupDiv.appendChild(makePopup());
-      return popupDiv;
-    });
-  } else {
-    rect.bindTooltip("Too far!");
-  }
+  applyProximityStyle(rect, isInRange(distX, distY), map);
 }
 
 // Player Movement
@@ -301,33 +321,7 @@ function refreshCache() {
         const distY = y - dy;
         const rect = cellLayers.get(key)!;
 
-        if (
-          Math.abs(distX) <= INTERACTION_RADIUS &&
-          Math.abs(distY) <= INTERACTION_RADIUS
-        ) {
-          rect.setStyle({ color: "blue" });
-
-          if (!rect.getPopup()) {
-            if (rect.getTooltip()) rect.unbindTooltip();
-            const popupDiv = rect._popupDiv;
-            const makePopup = rect._makePopup;
-            if (popupDiv && makePopup) {
-              rect.bindPopup(() => {
-                const oldButtons = popupDiv.querySelector("#popupButtons");
-                if (oldButtons) oldButtons.remove();
-                popupDiv.appendChild(makePopup());
-                return popupDiv;
-              });
-            }
-          }
-        } else {
-          rect.setStyle({ color: "red" });
-          if (rect.getPopup()) {
-            map.closePopup(rect.getPopup()!);
-            rect.unbindPopup();
-          }
-          rect.bindTooltip("Too far!");
-        }
+        applyProximityStyle(rect, isInRange(distX, distY), map);
       }
     }
   }
