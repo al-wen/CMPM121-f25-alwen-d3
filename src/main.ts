@@ -34,7 +34,7 @@ const CLASSROOM_LATLNG = leaflet.latLng(
 // Tunable gameplay parameters
 const GAMEPLAY_ZOOM_LEVEL = 19;
 const TILE_DEGREES = 1e-4;
-const CACHE_SPAWN_PROBABILITY = 0.1;
+const CACHE_SPAWN_PROBABILITY = 0.2;
 const INTERACTION_RADIUS = 5;
 
 let heldTokenValue: number | null = null;
@@ -82,10 +82,41 @@ type CustomRect = leaflet.Rectangle & {
   _makePopup?: () => HTMLElement;
 };
 
+interface CellMemento {
+  value: number;
+  modified: boolean;
+}
+
+const cellMementos = new Map<string, CellMemento>();
+
 const cellLayers = new Map<string, CustomRect>();
 
 function cellKey(x: number, y: number) {
   return `${x},${y}`;
+}
+
+function getCellValue(x: number, y: number): number {
+  const key = cellKey(x, y);
+
+  if (cellMementos.has(key)) {
+    return cellMementos.get(key)!.value;
+  }
+
+  const values = [0, 2, 4, 8];
+  return values[
+    Math.floor(luck([x, y, "initialValue"].toString()) * values.length)
+  ];
+}
+
+function saveCellMemento(x: number, y: number, value: number) {
+  const key = cellKey(x, y);
+  cellMementos.set(key, { value, modified: true });
+}
+
+function hasSpawnedCell(x: number, y: number): boolean {
+  const key = cellKey(x, y);
+  return cellMementos.has(key) ||
+    luck([x, y].toString()) < CACHE_SPAWN_PROBABILITY;
 }
 
 function latToCellX(lat: number) {
@@ -125,7 +156,6 @@ function applyProximityStyle(
     rect.setStyle({ color: "blue" });
 
     if (!rect.getPopup()) {
-      if (rect.getTooltip()) rect.unbindTooltip();
       bindInteractivePopup(rect, map);
     }
   } else {
@@ -134,7 +164,6 @@ function applyProximityStyle(
       map.closePopup(rect.getPopup()!);
       rect.unbindPopup();
     }
-    rect.bindTooltip("Too far!");
   }
 }
 
@@ -168,9 +197,9 @@ function spawnCache(x: number, y: number) {
   rect.addTo(map);
   cellLayers.set(key, rect);
 
-  const values = [0, 2, 4, 8];
-  let pointValue =
-    values[Math.floor(luck([x, y, "initialValue"].toString()) * values.length)];
+  let pointValue = getCellValue(x, y);
+
+  rect.bindTooltip(String(pointValue));
 
   const popupDiv = document.createElement("div");
   popupDiv.innerHTML =
@@ -197,8 +226,13 @@ function spawnCache(x: number, y: number) {
       heldTokenValue = pointValue;
       pointValue = 0;
 
+      saveCellMemento(x, y, pointValue);
+
       const v = popupDiv.querySelector("#value");
       if (v) v.textContent = "0";
+
+      if (rect.getTooltip()) rect.unbindTooltip();
+      rect.bindTooltip(String(pointValue));
 
       updateStatusPanel();
     };
@@ -210,9 +244,15 @@ function spawnCache(x: number, y: number) {
       if (heldTokenValue !== null && pointValue === heldTokenValue) {
         pointValue = pointValue + heldTokenValue;
         heldTokenValue = null;
+
+        saveCellMemento(x, y, pointValue);
+
         const v = popupDiv.querySelector("#value");
         if (v) v.textContent = String(pointValue);
         updateStatusPanel();
+
+        if (rect.getTooltip()) rect.unbindTooltip();
+        rect.bindTooltip(String(pointValue));
       }
       if (heldTokenValue === null || pointValue !== heldTokenValue) {
         craft.disabled = true;
@@ -226,9 +266,15 @@ function spawnCache(x: number, y: number) {
       if (heldTokenValue !== null && pointValue === 0) {
         pointValue = heldTokenValue;
         heldTokenValue = null;
+
+        saveCellMemento(x, y, pointValue);
+
         const v = popupDiv.querySelector("#value");
         if (v) v.textContent = String(pointValue);
         updateStatusPanel();
+
+        if (rect.getTooltip()) rect.unbindTooltip();
+        rect.bindTooltip(String(pointValue));
       }
     };
     if (pointValue !== 0 || heldTokenValue === null) {
@@ -310,18 +356,19 @@ function refreshCache() {
   for (let x = minX; x <= maxX; x++) {
     for (let y = minY; y <= maxY; y++) {
       const key = cellKey(x, y);
-      keep.add(key);
 
-      if (!cellLayers.has(key)) {
-        if (luck([x, y].toString()) < CACHE_SPAWN_PROBABILITY) {
+      if (hasSpawnedCell(x, y)) {
+        keep.add(key);
+
+        if (!cellLayers.has(key)) {
           spawnCache(x, y);
-        }
-      } else {
-        const distX = x - dx;
-        const distY = y - dy;
-        const rect = cellLayers.get(key)!;
+        } else {
+          const distX = x - dx;
+          const distY = y - dy;
+          const rect = cellLayers.get(key)!;
 
-        applyProximityStyle(rect, isInRange(distX, distY), map);
+          applyProximityStyle(rect, isInRange(distX, distY), map);
+        }
       }
     }
   }
