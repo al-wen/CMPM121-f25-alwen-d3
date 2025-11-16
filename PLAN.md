@@ -46,4 +46,5 @@ Key gameplay challenge: Can players collect and craft tokens from nearby locatio
 
 ### Steps for D3.c
 
-- [ ] ...
+- [ ] cells should use Flyweight pattern or something similar so cells not visible on the map do not require memory for storage if not modified
+- [ ] use the Memento pattern or something similar strategy to preserve the state of modified cells
