@@ -205,6 +205,17 @@ function spawnCache(x: number, y: number) {
   popupDiv.innerHTML =
     `<div>(${x},${y})<br>Value: <span id="value">${pointValue}</span></div>`;
 
+  function updateDisplay() {
+    const valueElement = popupDiv.querySelector("#value");
+    if (valueElement) {
+      valueElement.textContent = String(pointValue);
+    }
+    if (rect.getTooltip()) {
+      rect.unbindTooltip();
+    }
+    rect.bindTooltip(String(pointValue));
+  }
+
   function makePopup() {
     const buttons = document.createElement("div");
     buttons.id = "popupButtons";
@@ -222,18 +233,10 @@ function spawnCache(x: number, y: number) {
         poke.disabled = true;
         return;
       }
-
       heldTokenValue = pointValue;
       pointValue = 0;
-
       saveCellMemento(x, y, pointValue);
-
-      const v = popupDiv.querySelector("#value");
-      if (v) v.textContent = "0";
-
-      if (rect.getTooltip()) rect.unbindTooltip();
-      rect.bindTooltip(String(pointValue));
-
+      updateDisplay();
       updateStatusPanel();
     };
 
@@ -247,11 +250,12 @@ function spawnCache(x: number, y: number) {
 
         saveCellMemento(x, y, pointValue);
 
-        const v = popupDiv.querySelector("#value");
-        if (v) v.textContent = String(pointValue);
+        updateDisplay();
         updateStatusPanel();
 
-        if (rect.getTooltip()) rect.unbindTooltip();
+        if (rect.getTooltip()) {
+          rect.unbindTooltip();
+        }
         rect.bindTooltip(String(pointValue));
       }
       if (heldTokenValue === null || pointValue !== heldTokenValue) {
@@ -266,14 +270,12 @@ function spawnCache(x: number, y: number) {
       if (heldTokenValue !== null && pointValue === 0) {
         pointValue = heldTokenValue;
         heldTokenValue = null;
-
         saveCellMemento(x, y, pointValue);
-
-        const v = popupDiv.querySelector("#value");
-        if (v) v.textContent = String(pointValue);
+        updateDisplay();
         updateStatusPanel();
-
-        if (rect.getTooltip()) rect.unbindTooltip();
+        if (rect.getTooltip()) {
+          rect.unbindTooltip();
+        }
         rect.bindTooltip(String(pointValue));
       }
     };
@@ -281,7 +283,6 @@ function spawnCache(x: number, y: number) {
       place.disabled = true;
     }
 
-    buttons.appendChild(place);
     buttons.appendChild(poke);
     buttons.appendChild(craft);
     buttons.appendChild(place);
