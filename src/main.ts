@@ -324,18 +324,27 @@ function movePlayer(dx: number, dy: number) {
 }
 
 function moveButtons() {
-  const directions: { label: string; dx: number; dy: number }[] = [
-    { label: "Up", dx: 1, dy: 0 },
-    { label: "Down", dx: -1, dy: 0 },
-    { label: "Left", dx: 0, dy: -1 },
-    { label: "Right", dx: 0, dy: 1 },
-  ];
+  const directions: { label: string; dx: number; dy: number; key?: string }[] =
+    [
+      { label: "Up", dx: 1, dy: 0, key: "ArrowUp" },
+      { label: "Down", dx: -1, dy: 0, key: "ArrowDown" },
+      { label: "Left", dx: 0, dy: -1, key: "ArrowLeft" },
+      { label: "Right", dx: 0, dy: 1, key: "ArrowRight" },
+    ];
 
   directions.forEach((dir) => {
     const btn = document.createElement("button");
     btn.textContent = dir.label;
     btn.onclick = () => movePlayer(dir.dx, dir.dy);
     controlPanelDiv.appendChild(btn);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    const dir = directions.find((d) => d.key === event.key);
+    if (dir) {
+      movePlayer(dir.dx, dir.dy);
+      event.preventDefault();
+    }
   });
 }
 
