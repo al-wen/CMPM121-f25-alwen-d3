@@ -42,9 +42,18 @@ Key gameplay challenge: Can players collect and craft tokens from nearby locatio
 - [x] only the cells near to their current location are available for interaction as player moves
 - [x] game now requires that threshold to be reached for victory to be declared
 
-## D3.b: [insert header]
+## D3.c: Object persistence
 
 ### Steps for D3.c
 
 - [x] cells should use Flyweight pattern or something similar so cells not visible on the map do not require memory for storage if not modified
 - [x] use the Memento pattern or something similar strategy to preserve the state of modified cells
+
+## D3.d: Gameplay Across Real-world Space and Time
+
+### Steps for D3.d
+
+- [x] player can move their character by moving their device around the real world
+- [ ] save data with localStorage API
+- [ ] add reset data
+- [ ] switch between geolocation and button

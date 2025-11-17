@@ -15,14 +15,15 @@ import luck from "./_luck.ts";
 
 const controlPanelDiv = document.createElement("div");
 controlPanelDiv.id = "controlPanel";
-document.body.append(controlPanelDiv);
 
 const mapDiv = document.createElement("div");
 mapDiv.id = "map";
-document.body.append(mapDiv);
 
 const statusPanelDiv = document.createElement("div");
 statusPanelDiv.id = "statusPanel";
+
+document.body.append(mapDiv);
+document.body.append(controlPanelDiv);
 document.body.append(statusPanelDiv);
 
 // Our classroom location
@@ -38,6 +39,8 @@ const CACHE_SPAWN_PROBABILITY = 0.2;
 const INTERACTION_RADIUS = 5;
 
 let heldTokenValue: number | null = null;
+
+let GEOLOCATION_MODE = false;
 
 function updateStatusPanel() {
   if (heldTokenValue === null) {
@@ -340,6 +343,22 @@ function moveButtons() {
     controlPanelDiv.appendChild(btn);
   });
 
+  // Geolocation button
+  const geoToggleBtn = document.createElement("button");
+  function updateGeoBtn() {
+    if (GEOLOCATION_MODE) {
+      geoToggleBtn.textContent = "Geolocation: On";
+    } else {
+      geoToggleBtn.textContent = "Geolocation: Off";
+    }
+  }
+  geoToggleBtn.onclick = () => {
+    GEOLOCATION_MODE = !GEOLOCATION_MODE;
+    updateGeoBtn();
+  };
+  updateGeoBtn();
+  controlPanelDiv.appendChild(geoToggleBtn);
+
   document.addEventListener("keydown", (event) => {
     const dir = directions.find((d) => d.key === event.key);
     if (dir) {
@@ -400,3 +419,8 @@ function checkWin() {
   }
   return false;
 }
+
+navigator.geolocation.getCurrentPosition(
+  (pos) => console.log(pos.coords.latitude, pos.coords.longitude),
+  (err) => console.error("Geolocation error:", err),
+);
