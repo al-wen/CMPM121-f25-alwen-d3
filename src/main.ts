@@ -22,9 +22,19 @@ mapDiv.id = "map";
 const statusPanelDiv = document.createElement("div");
 statusPanelDiv.id = "statusPanel";
 
+const coordsDiv = document.createElement("div");
+coordsDiv.id = "coordsPanel";
+coordsDiv.style.position = "fixed";
+coordsDiv.style.bottom = "0";
+coordsDiv.style.left = "0";
+coordsDiv.style.right = "0";
+coordsDiv.style.textAlign = "center";
+coordsDiv.style.padding = "6px 0";
+
 document.body.append(mapDiv);
 document.body.append(controlPanelDiv);
 document.body.append(statusPanelDiv);
+document.body.append(coordsDiv);
 
 // Our classroom location
 const CLASSROOM_LATLNG = leaflet.latLng(
@@ -41,6 +51,26 @@ const INTERACTION_RADIUS = 5;
 let heldTokenValue: number | null = null;
 
 let GEOLOCATION_MODE = false;
+let geoIntervalId: number | null = null;
+
+function updateLocation() {
+  if (GEOLOCATION_MODE) {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        playerLatLng = leaflet.latLng(
+          pos.coords.latitude,
+          pos.coords.longitude,
+        );
+        playerMarker.setLatLng(playerLatLng);
+        map.setView(playerMarker.getLatLng());
+        refreshCache();
+        updateCoordsDisplay();
+        updateStatusPanel();
+      },
+      (err) => console.error("Geolocation error:", err),
+    );
+  }
+}
 
 function updateStatusPanel() {
   if (heldTokenValue === null) {
@@ -128,6 +158,13 @@ function latToCellX(lat: number) {
 
 function lngToCellY(lng: number) {
   return Math.floor(lng / TILE_DEGREES);
+}
+
+function updateCoordsDisplay() {
+  if (!playerLatLng) return;
+  const cellX = latToCellX(playerLatLng.lat);
+  const cellY = lngToCellY(playerLatLng.lng);
+  coordsDiv.textContent = `(${cellX},${cellY})`;
 }
 
 // HELPERS
@@ -325,6 +362,7 @@ function movePlayer(dx: number, dy: number) {
   map.panTo(playerLatLng);
 
   refreshCache();
+  updateCoordsDisplay();
 }
 
 function moveButtons() {
@@ -338,6 +376,7 @@ function moveButtons() {
 
   directions.forEach((dir) => {
     const btn = document.createElement("button");
+    btn.className = "dir-button";
     btn.textContent = dir.label;
     btn.onclick = () => movePlayer(dir.dx, dir.dy);
     controlPanelDiv.appendChild(btn);
@@ -355,6 +394,26 @@ function moveButtons() {
   geoToggleBtn.onclick = () => {
     GEOLOCATION_MODE = !GEOLOCATION_MODE;
     updateGeoBtn();
+    const dirButtons = controlPanelDiv.querySelectorAll("button.dir-button");
+
+    for (let i = 0; i < dirButtons.length; i++) {
+      const b = dirButtons[i] as HTMLButtonElement;
+      if (GEOLOCATION_MODE) {
+        b.disabled = true;
+      } else {
+        b.disabled = false;
+      }
+    }
+    if (GEOLOCATION_MODE) {
+      if (geoIntervalId == null) {
+        geoIntervalId = setInterval(updateLocation, 1000);
+      }
+    } else {
+      if (geoIntervalId != null) {
+        clearInterval(geoIntervalId);
+        geoIntervalId = null;
+      }
+    }
   };
   updateGeoBtn();
   controlPanelDiv.appendChild(geoToggleBtn);
@@ -411,6 +470,7 @@ function refreshCache() {
 }
 
 refreshCache();
+updateCoordsDisplay();
 
 function checkWin() {
   if (heldTokenValue !== null && heldTokenValue >= 16) {
@@ -420,7 +480,14 @@ function checkWin() {
   return false;
 }
 
-navigator.geolocation.getCurrentPosition(
-  (pos) => console.log(pos.coords.latitude, pos.coords.longitude),
-  (err) => console.error("Geolocation error:", err),
-);
+/*
+
+function checkLocation() {
+  navigator.geolocation.watchPosition(
+    (pos) => console.log("watch", pos.coords),
+    (err) => console.error(err),
+    { enableHighAccuracy: true },
+  );
+}
+
+*/

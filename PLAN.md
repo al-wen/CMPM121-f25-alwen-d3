@@ -56,4 +56,4 @@ Key gameplay challenge: Can players collect and craft tokens from nearby locatio
 - [x] player can move their character by moving their device around the real world
 - [ ] save data with localStorage API
 - [ ] add reset data
-- [ ] switch between geolocation and button
+- [x] switch between geolocation and button
