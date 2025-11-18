@@ -556,7 +556,6 @@ updateCoordsDisplay();
 
 function checkWin() {
   if (heldTokenValue !== null && heldTokenValue >= 128) {
-    console.log("win");
     return true;
   }
   return false;
