@@ -273,6 +273,11 @@ function applyProximityStyle(
   }
 }
 
+function updateTooltip(rect: leaflet.Rectangle, value: number) {
+  rect.unbindTooltip();
+  rect.bindTooltip(String(value));
+}
+
 // Cache
 
 function spawnCache(x: number, y: number) {
@@ -316,10 +321,7 @@ function spawnCache(x: number, y: number) {
     if (valueElement) {
       valueElement.textContent = String(pointValue);
     }
-    if (rect.getTooltip()) {
-      rect.unbindTooltip();
-    }
-    rect.bindTooltip(String(pointValue));
+    updateTooltip(rect, pointValue);
   }
 
   function makePopup() {
@@ -360,10 +362,7 @@ function spawnCache(x: number, y: number) {
         updateDisplay();
         updateStatusPanel();
 
-        if (rect.getTooltip()) {
-          rect.unbindTooltip();
-        }
-        rect.bindTooltip(String(pointValue));
+        updateTooltip(rect, pointValue);
         saveGameState();
       }
       if (heldTokenValue === null || pointValue !== heldTokenValue) {
@@ -381,10 +380,7 @@ function spawnCache(x: number, y: number) {
         saveCellMemento(x, y, pointValue);
         updateDisplay();
         updateStatusPanel();
-        if (rect.getTooltip()) {
-          rect.unbindTooltip();
-        }
-        rect.bindTooltip(String(pointValue));
+        updateTooltip(rect, pointValue);
         saveGameState();
       }
     };
@@ -427,7 +423,6 @@ function movePlayer(dx: number, dy: number) {
 
   playerMarker.setLatLng(playerLatLng);
   map.panTo(playerLatLng);
-
   refreshCache();
   updateCoordsDisplay();
   saveGameState();
@@ -571,15 +566,3 @@ function reset() {
   localStorage.clear();
   location.reload();
 }
-
-/*
-
-function checkLocation() {
-  navigator.geolocation.watchPosition(
-    (pos) => console.log("watch", pos.coords),
-    (err) => console.error(err),
-    { enableHighAccuracy: true },
-  );
-}
-
-*/
