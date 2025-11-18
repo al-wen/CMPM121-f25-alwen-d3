@@ -13,6 +13,9 @@ import luck from "./_luck.ts";
 
 // Create basic UI elements
 
+const titleDiv = document.createElement("div");
+titleDiv.innerHTML = "<h1>D3: World of 128</h1>";
+
 const controlPanelDiv = document.createElement("div");
 controlPanelDiv.id = "controlPanel";
 
@@ -31,6 +34,7 @@ coordsDiv.style.right = "0";
 coordsDiv.style.textAlign = "center";
 coordsDiv.style.padding = "6px 0";
 
+document.body.append(titleDiv);
 document.body.append(mapDiv);
 document.body.append(controlPanelDiv);
 document.body.append(statusPanelDiv);
@@ -53,6 +57,74 @@ let heldTokenValue: number | null = null;
 let GEOLOCATION_MODE = false;
 let geoIntervalId: number | null = null;
 
+// localStorage
+interface GameState {
+  playerLat: number;
+  playerLng: number;
+  heldTokenValue: number | null;
+  geolocationMode: boolean;
+  cellMementos: Array<{
+    key: string;
+    value: number;
+    modified: boolean;
+  }>;
+}
+
+function loadGameState(): GameState | null {
+  const savedState = localStorage.getItem("gameState");
+  if (savedState) {
+    try {
+      return JSON.parse(savedState);
+    } catch (e) {
+      console.error("Failed to parse saved game state:", e);
+      return null;
+    }
+  }
+  return null;
+}
+
+let playerLatLng = CLASSROOM_LATLNG;
+const initialSavedState = loadGameState();
+if (initialSavedState) {
+  playerLatLng = leaflet.latLng(
+    initialSavedState.playerLat,
+    initialSavedState.playerLng,
+  );
+}
+
+interface CellMemento {
+  value: number;
+  modified: boolean;
+}
+
+const cellMementos = new Map<string, CellMemento>();
+
+if (initialSavedState) {
+  for (const memento of initialSavedState.cellMementos) {
+    cellMementos.set(memento.key, {
+      value: memento.value,
+      modified: memento.modified,
+    });
+  }
+  heldTokenValue = initialSavedState.heldTokenValue;
+  GEOLOCATION_MODE = initialSavedState.geolocationMode;
+}
+
+function saveGameState() {
+  const state: GameState = {
+    playerLat: playerLatLng.lat,
+    playerLng: playerLatLng.lng,
+    heldTokenValue: heldTokenValue,
+    geolocationMode: GEOLOCATION_MODE,
+    cellMementos: Array.from(cellMementos.entries()).map(([key, memento]) => ({
+      key,
+      value: memento.value,
+      modified: memento.modified,
+    })),
+  };
+  localStorage.setItem("gameState", JSON.stringify(state));
+}
+
 function updateLocation() {
   if (GEOLOCATION_MODE) {
     navigator.geolocation.getCurrentPosition(
@@ -66,6 +138,7 @@ function updateLocation() {
         refreshCache();
         updateCoordsDisplay();
         updateStatusPanel();
+        saveGameState();
       },
       (err) => console.error("Geolocation error:", err),
     );
@@ -88,7 +161,7 @@ updateStatusPanel();
 
 // Create the map (element with id "map" is defined in index.html)
 const map = leaflet.map(mapDiv, {
-  center: CLASSROOM_LATLNG,
+  center: playerLatLng,
   zoom: GAMEPLAY_ZOOM_LEVEL,
   minZoom: GAMEPLAY_ZOOM_LEVEL,
   maxZoom: GAMEPLAY_ZOOM_LEVEL,
@@ -106,7 +179,7 @@ leaflet
   .addTo(map);
 
 // Add a marker to represent the player
-const playerMarker = leaflet.marker(CLASSROOM_LATLNG);
+const playerMarker = leaflet.marker(playerLatLng);
 playerMarker.bindTooltip("That's you!");
 playerMarker.addTo(map);
 
@@ -114,13 +187,6 @@ type CustomRect = leaflet.Rectangle & {
   _popupDiv?: HTMLElement;
   _makePopup?: () => HTMLElement;
 };
-
-interface CellMemento {
-  value: number;
-  modified: boolean;
-}
-
-const cellMementos = new Map<string, CellMemento>();
 
 const cellLayers = new Map<string, CustomRect>();
 
@@ -278,6 +344,7 @@ function spawnCache(x: number, y: number) {
       saveCellMemento(x, y, pointValue);
       updateDisplay();
       updateStatusPanel();
+      saveGameState();
     };
 
     const craft = document.createElement("button");
@@ -297,6 +364,7 @@ function spawnCache(x: number, y: number) {
           rect.unbindTooltip();
         }
         rect.bindTooltip(String(pointValue));
+        saveGameState();
       }
       if (heldTokenValue === null || pointValue !== heldTokenValue) {
         craft.disabled = true;
@@ -317,6 +385,7 @@ function spawnCache(x: number, y: number) {
           rect.unbindTooltip();
         }
         rect.bindTooltip(String(pointValue));
+        saveGameState();
       }
     };
     if (pointValue !== 0 || heldTokenValue === null) {
@@ -350,8 +419,6 @@ function spawnCache(x: number, y: number) {
 
 // Player Movement
 
-let playerLatLng = CLASSROOM_LATLNG;
-
 function movePlayer(dx: number, dy: number) {
   playerLatLng = leaflet.latLng(
     playerLatLng.lat + dx * TILE_DEGREES,
@@ -363,6 +430,7 @@ function movePlayer(dx: number, dy: number) {
 
   refreshCache();
   updateCoordsDisplay();
+  saveGameState();
 }
 
 function moveButtons() {
@@ -394,6 +462,7 @@ function moveButtons() {
   geoToggleBtn.onclick = () => {
     GEOLOCATION_MODE = !GEOLOCATION_MODE;
     updateGeoBtn();
+    saveGameState();
     const dirButtons = controlPanelDiv.querySelectorAll("button.dir-button");
 
     for (let i = 0; i < dirButtons.length; i++) {
@@ -418,6 +487,12 @@ function moveButtons() {
   updateGeoBtn();
   controlPanelDiv.appendChild(geoToggleBtn);
 
+  // Reset button
+  const resetBtn = document.createElement("button");
+  resetBtn.textContent = "Reset Game";
+  resetBtn.onclick = () => reset();
+  controlPanelDiv.appendChild(resetBtn);
+
   document.addEventListener("keydown", (event) => {
     const dir = directions.find((d) => d.key === event.key);
     if (dir) {
@@ -428,6 +503,18 @@ function moveButtons() {
 }
 
 moveButtons();
+
+if (GEOLOCATION_MODE) {
+  const dirButtons = controlPanelDiv.querySelectorAll("button.dir-button");
+  for (let i = 0; i < dirButtons.length; i++) {
+    const b = dirButtons[i] as HTMLButtonElement;
+    b.disabled = true;
+  }
+  if (geoIntervalId == null) {
+    geoIntervalId = setInterval(updateLocation, 1000);
+    updateLocation();
+  }
+}
 
 function refreshCache() {
   const bounds = map.getBounds();
@@ -473,11 +560,16 @@ refreshCache();
 updateCoordsDisplay();
 
 function checkWin() {
-  if (heldTokenValue !== null && heldTokenValue >= 16) {
+  if (heldTokenValue !== null && heldTokenValue >= 128) {
     console.log("win");
     return true;
   }
   return false;
+}
+
+function reset() {
+  localStorage.clear();
+  location.reload();
 }
 
 /*

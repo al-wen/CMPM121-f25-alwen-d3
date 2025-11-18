@@ -54,6 +54,6 @@ Key gameplay challenge: Can players collect and craft tokens from nearby locatio
 ### Steps for D3.d
 
 - [x] player can move their character by moving their device around the real world
-- [ ] save data with localStorage API
-- [ ] add reset data
+- [x] save data with localStorage API
+- [x] add reset data
 - [x] switch between geolocation and button
